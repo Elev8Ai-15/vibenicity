@@ -3,6 +3,9 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
+import { registerChatRoutes } from "./replit_integrations/chat";
+import { registerAudioRoutes } from "./replit_integrations/audio";
+import { registerImageRoutes } from "./replit_integrations/image";
 
 const app = express();
 const httpServer = createServer(app);
@@ -64,6 +67,11 @@ app.use((req, res, next) => {
   // Set up authentication BEFORE other routes
   await setupAuth(app);
   registerAuthRoutes(app);
+
+  // Register Replit integration routes
+  registerChatRoutes(app);
+  registerAudioRoutes(app);
+  registerImageRoutes(app);
 
   // Initialize self-learning slang discovery service
   const { initializeSlangDiscovery } = await import('./lib/slang-discovery');

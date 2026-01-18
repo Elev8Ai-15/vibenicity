@@ -1,46 +1,48 @@
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 
-// Priority: User's own API keys first, then Replit AI Integrations as fallback
+// Priority: Replit AI Integrations first (more reliable), then user's own keys as fallback
 
-// OpenAI - check for user's key first, then Replit's
-const openaiKey = process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
-const openaiBaseUrl = process.env.OPENAI_API_KEY 
-  ? undefined  // Use default OpenAI URL for user's own key
-  : process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+// OpenAI - prefer Replit's AI integrations
+const openaiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+const openaiBaseUrl = process.env.AI_INTEGRATIONS_OPENAI_API_KEY 
+  ? process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
+  : undefined;
 
 export const openai = new OpenAI({
   apiKey: openaiKey,
   baseURL: openaiBaseUrl,
 });
 
-// Anthropic (Claude) - check for user's key first
-const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
-const anthropicBaseUrl = process.env.ANTHROPIC_API_KEY
-  ? undefined  // Use default Anthropic URL for user's own key
-  : process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL;
+// Anthropic (Claude) - prefer Replit's AI integrations
+const anthropicKey = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
+const anthropicBaseUrl = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY
+  ? process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL
+  : undefined;
 
 export const anthropic = anthropicKey ? new Anthropic({
   apiKey: anthropicKey,
   baseURL: anthropicBaseUrl,
 }) : null;
 
-// Gemini - check for user's key first (via OpenAI-compatible interface)
-const geminiKey = process.env.GEMINI_API_KEY || process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
-const geminiBaseUrl = process.env.GEMINI_API_KEY
-  ? 'https://generativelanguage.googleapis.com/v1beta/openai/'  // Google's OpenAI-compatible endpoint
-  : process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
+// Gemini - prefer Replit's AI integrations (via OpenAI-compatible interface)
+const geminiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+const geminiBaseUrl = process.env.AI_INTEGRATIONS_GEMINI_API_KEY
+  ? process.env.AI_INTEGRATIONS_GEMINI_BASE_URL
+  : process.env.GEMINI_API_KEY 
+    ? 'https://generativelanguage.googleapis.com/v1beta/openai/'
+    : undefined;
 
 export const gemini = geminiKey ? new OpenAI({
   apiKey: geminiKey,
   baseURL: geminiBaseUrl,
 }) : null;
 
-// Log which providers are using user keys vs Replit
+// Log which providers are configured
 console.log('[AI] Provider config:');
-console.log(`  OpenAI: ${process.env.OPENAI_API_KEY ? 'YOUR KEY' : 'Replit AI'}`);
-console.log(`  Claude: ${process.env.ANTHROPIC_API_KEY ? 'YOUR KEY' : anthropicKey ? 'Replit AI' : 'Not configured'}`);
-console.log(`  Gemini: ${process.env.GEMINI_API_KEY ? 'YOUR KEY' : geminiKey ? 'Replit AI' : 'Not configured'}`);
+console.log(`  OpenAI: ${process.env.AI_INTEGRATIONS_OPENAI_API_KEY ? 'Replit AI' : process.env.OPENAI_API_KEY ? 'Your key' : 'Not configured'}`);
+console.log(`  Claude: ${process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY ? 'Replit AI' : process.env.ANTHROPIC_API_KEY ? 'Your key' : 'Not configured'}`);
+console.log(`  Gemini: ${process.env.AI_INTEGRATIONS_GEMINI_API_KEY ? 'Replit AI' : process.env.GEMINI_API_KEY ? 'Your key' : 'Not configured'}`);
 
 export type AIProvider = 'gemini' | 'claude' | 'openai' | 'auto';
 

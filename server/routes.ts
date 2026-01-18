@@ -59,7 +59,7 @@ export async function registerRoutes(
       // 3. Create build session
       const userId = (req.user as any)?.claims?.sub;
       const modelMap: Record<string, string> = {
-        'openai': 'gpt-4o',
+        'openai': 'gpt-5',
         'claude': 'claude-sonnet-4-5',
         'gemini': 'gemini-2.5-flash'
       };
@@ -72,7 +72,7 @@ export async function registerRoutes(
           confidence: translation.confidence
         },
         provider: selectedProvider,
-        model: modelMap[selectedProvider] || 'gpt-4o',
+        model: modelMap[selectedProvider] || 'gpt-5',
         status: 'analyzing'
       });
 

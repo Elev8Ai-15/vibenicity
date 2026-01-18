@@ -124,14 +124,14 @@ async function callAI(provider: AIProvider, systemPrompt: string, userPrompt: st
       return content;
     }
     
-    // Default to OpenAI (GPT-4o supports higher limits)
+    // Default to OpenAI (GPT-5 via Replit AI Integrations)
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
       ],
-      max_tokens: 8192,  // Conservative limit for reliability
+      max_completion_tokens: 8192,
     });
     const content = response.choices[0]?.message?.content || '';
     console.log(`[AI] OpenAI response length: ${content.length} chars`);

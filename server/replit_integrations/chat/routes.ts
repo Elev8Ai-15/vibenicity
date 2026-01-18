@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import OpenAI from "openai";
 import { chatStorage } from "./storage";
+import { engine } from "../../../client/src/lib/linguistics";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -65,25 +66,57 @@ export function registerChatRoutes(app: Express): void {
       const conversationId = parseInt(req.params.id);
       const { content } = req.body;
 
-      // Save user message
+      // Linguistics Engine: Translate slang/dialect before processing
+      const translation = engine.translate(content);
+      const processedContent = translation.terms.length > 0 ? translation.translatedText : content;
+
+      // Save original user message
       await chatStorage.createMessage(conversationId, "user", content);
 
       // Get conversation history for context
       const messages = await chatStorage.getMessagesByConversation(conversationId);
-      const chatMessages = messages.map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      }));
+      const chatMessages = messages.map((m, index) => {
+        // Translate the last user message for better AI understanding
+        if (index === messages.length - 1 && m.role === "user") {
+          return {
+            role: m.role as "user" | "assistant",
+            content: processedContent,
+          };
+        }
+        return {
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        };
+      });
 
       // Set up SSE
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
+      // If linguistics detected terms, send them to the client
+      if (translation.terms.length > 0) {
+        const linguisticsInfo = {
+          type: "linguistics",
+          terms: translation.terms,
+          translatedText: translation.translatedText,
+          confidence: translation.confidence
+        };
+        res.write(`data: ${JSON.stringify(linguisticsInfo)}\n\n`);
+      }
+
+      // Build system prompt with linguistics context
+      const systemPrompt = translation.terms.length > 0
+        ? `You are a helpful assistant. The user's message contains slang/dialect terms that have been translated for clarity: ${translation.terms.map(t => `"${t.term}" means "${t.meaning}"`).join(", ")}. Understand their intent and respond naturally.`
+        : "You are a helpful assistant.";
+
       // Stream response from OpenAI
       const stream = await openai.chat.completions.create({
         model: "gpt-5.1",
-        messages: chatMessages,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...chatMessages
+        ],
         stream: true,
         max_completion_tokens: 2048,
       });

@@ -46,16 +46,16 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Input prompt is required" });
       }
 
-      // 1. Analyze linguistics
-      const translation = engine.translate(input);
-      
+      // 1. Linguistics disabled for performance (was causing 40s delays)
+      // const translation = engine.translate(input);
+
       // 2. Smart provider selection if 'auto'
       let selectedProvider = provider as AIProvider;
       if (provider === 'auto') {
-        selectedProvider = selectBestProvider(translation.translatedText || input);
+        selectedProvider = selectBestProvider(input);
         console.log(`[Build] Auto-selected provider: ${selectedProvider}`);
       }
-      
+
       // 3. Create build session
       const userId = (req.user as any)?.claims?.sub;
       const modelMap: Record<string, string> = {
@@ -66,10 +66,10 @@ export async function registerRoutes(
       const session = await storage.createBuildSession({
         userId,
         userPrompt: input,
-        translatedPrompt: translation.translatedText || input,
+        translatedPrompt: input, // Use original prompt directly
         linguisticsData: {
-          terms: translation.terms,
-          confidence: translation.confidence
+          terms: [],
+          confidence: 1
         },
         provider: selectedProvider,
         model: modelMap[selectedProvider] || 'gpt-4o',
@@ -90,22 +90,13 @@ export async function registerRoutes(
         }
       };
 
-      // Send linguistics analysis
+      // Linguistics analysis disabled for performance
       sendEvent({
         type: 'linguistics',
         sessionId: session.id,
-        terms: translation.terms,
-        translatedPrompt: translation.translatedText
+        terms: [],
+        translatedPrompt: input
       });
-
-      // Log linguistics
-      if (translation.terms.length > 0) {
-        await storage.createBuildLog({
-          sessionId: session.id,
-          agent: 'Linguistics Engine',
-          message: `Decoded ${translation.terms.length} dialect terms: ${translation.terms.map(t => t.term).join(', ')}`
-        });
-      }
 
       // Run multi-stage pipeline
       const phaseAgents: Record<BuildPhase, string> = {
@@ -120,8 +111,8 @@ export async function registerRoutes(
 
       const result = await runPipeline(
         selectedProvider,
-        translation.translatedText || input,
-        { terms: translation.terms, confidence: translation.confidence },
+        input, // Use original prompt for accurate code generation
+        { terms: [], confidence: 1 },
         async (phase: BuildPhase) => {
           await storage.updateBuildSessionStatus(session.id, phase);
           sendEvent({ type: 'status', phase, sessionId: session.id });

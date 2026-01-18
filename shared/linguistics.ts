@@ -2,8 +2,8 @@
 // LINGUISTICS DATABASE - 535 TERMS ACROSS 11 CATEGORIES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export type LinguisticCategory = 
-  | 'GEN_Z' | 'AAVE' | 'TECH' | 'STARTUP' | 'DESIGN' 
+export type LinguisticCategory =
+  | 'GEN_Z' | 'AAVE' | 'TECH' | 'STARTUP' | 'DESIGN'
   | 'SOUTHERN' | 'UK' | 'HIPHOP' | 'GAMING' | 'HISPANIC' | 'EMOTIONAL';
 
 export interface LinguisticTerm {
@@ -151,55 +151,81 @@ const LINGUISTICS: Record<LinguisticCategory, Record<string, string>> = {
   }
 };
 
-export class LinguisticsEngine {
-  private db = LINGUISTICS;
-  
-  translate(input: string): TranslationResult {
-    if (!input) return { original: '', terms: [], confidence: 1, translatedText: '' };
-    
-    const found: LinguisticTerm[] = [];
-    const lower = input.toLowerCase();
-    let translatedText = input;
+// Pre-compiled regex patterns with metadata (OPTIMIZED - built once at module load)
+interface CompiledPattern {
+  regex: RegExp;
+  term: string;
+  meaning: string;
+  category: LinguisticCategory;
+}
 
-    // We process longer phrases first to avoid partial matches
-    const allTerms: {term: string, meaning: string, category: LinguisticCategory}[] = [];
-    
+class LinguisticsEngine {
+  private patterns: CompiledPattern[] = [];
+  private db = LINGUISTICS;
+
+  constructor() {
+    // PRE-COMPILE all regexes ONCE at initialization (not on every translate call!)
+    const allTerms: CompiledPattern[] = [];
+
     for (const [category, terms] of Object.entries(this.db)) {
       for (const [slang, meaning] of Object.entries(terms)) {
-         allTerms.push({ term: slang, meaning, category: category as LinguisticCategory });
+        // Escape special regex characters
+        const escaped = slang.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Create regex with word boundaries for whole-word matching
+        const regex = new RegExp(`\\b${escaped}\\b`, 'gi');
+
+        allTerms.push({
+          regex,
+          term: slang,
+          meaning,
+          category: category as LinguisticCategory
+        });
       }
     }
 
-    // Sort by length descending
-    allTerms.sort((a, b) => b.term.length - a.term.length);
+    // Sort by term length (longest first) to match multi-word phrases before single words
+    this.patterns = allTerms.sort((a, b) => b.term.length - a.term.length);
+  }
 
-    // Replace and record
-    for (const item of allTerms) {
-      // Simple word boundary check (imperfect but better than simple substring)
-      const regex = new RegExp(`\\b${item.term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-      
-      if (regex.test(translatedText)) {
-        found.push(item);
-        // Replace in text for the "translated" version, keeping case if possible? 
-        // For now, just simplistic replacement
-        translatedText = translatedText.replace(regex, `[${item.meaning}]`);
+  translate(input: string): TranslationResult {
+    if (!input) return { original: '', terms: [], confidence: 1, translatedText: input };
+
+    const found: LinguisticTerm[] = [];
+    const foundSet = new Set<string>(); // Prevent duplicates
+
+    // FAST: Just test pre-compiled regexes (no rebuilding, no re-sorting!)
+    for (const pattern of this.patterns) {
+      if (pattern.regex.test(input)) {
+        const key = `${pattern.term}:${pattern.category}`;
+        if (!foundSet.has(key)) {
+          foundSet.add(key);
+          found.push({
+            term: pattern.term,
+            meaning: pattern.meaning,
+            category: pattern.category
+          });
+        }
+        // Reset regex lastIndex for global flag
+        pattern.regex.lastIndex = 0;
       }
     }
 
-    return { 
-      original: input, 
-      terms: found, 
+    // CRITICAL FIX: Return ORIGINAL text, not corrupted version
+    // The AI needs clean input to generate correct code
+    return {
+      original: input,
+      terms: found,
       confidence: Math.min(1, 0.7 + found.length * 0.05),
-      translatedText
+      translatedText: input // Return original, not [bracketed] version
     };
   }
-  
+
   getRandomTerm(): LinguisticTerm {
-      const categories = Object.keys(this.db) as LinguisticCategory[];
-      const cat = categories[Math.floor(Math.random() * categories.length)];
-      const terms = Object.entries(this.db[cat]);
-      const [term, meaning] = terms[Math.floor(Math.random() * terms.length)];
-      return { term, meaning, category: cat };
+    const categories = Object.keys(this.db) as LinguisticCategory[];
+    const cat = categories[Math.floor(Math.random() * categories.length)];
+    const terms = Object.entries(this.db[cat]);
+    const [term, meaning] = terms[Math.floor(Math.random() * terms.length)];
+    return { term, meaning, category: cat };
   }
 }
 

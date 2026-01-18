@@ -46,8 +46,8 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Input prompt is required" });
       }
 
-      // 1. Linguistics disabled for performance (was causing 40s delays)
-      // const translation = engine.translate(input);
+      // 1. Analyze linguistics (OPTIMIZED - now instant!)
+      const translation = engine.translate(input);
 
       // 2. Smart provider selection if 'auto'
       let selectedProvider = provider as AIProvider;
@@ -66,10 +66,10 @@ export async function registerRoutes(
       const session = await storage.createBuildSession({
         userId,
         userPrompt: input,
-        translatedPrompt: input, // Use original prompt directly
+        translatedPrompt: input, // Always use original (fixed engine returns clean text)
         linguisticsData: {
-          terms: [],
-          confidence: 1
+          terms: translation.terms,
+          confidence: translation.confidence
         },
         provider: selectedProvider,
         model: modelMap[selectedProvider] || 'gpt-4o',
@@ -90,13 +90,22 @@ export async function registerRoutes(
         }
       };
 
-      // Linguistics analysis disabled for performance
+      // Send linguistics analysis to client
       sendEvent({
         type: 'linguistics',
         sessionId: session.id,
-        terms: [],
+        terms: translation.terms,
         translatedPrompt: input
       });
+
+      // Log detected dialect terms
+      if (translation.terms.length > 0) {
+        await storage.createBuildLog({
+          sessionId: session.id,
+          agent: 'Linguistics Engine',
+          message: `Detected ${translation.terms.length} dialect terms: ${translation.terms.map(t => `"${t.term}" (${t.meaning})`).join(', ')}`
+        });
+      }
 
       // Run multi-stage pipeline
       const phaseAgents: Record<BuildPhase, string> = {
@@ -111,8 +120,8 @@ export async function registerRoutes(
 
       const result = await runPipeline(
         selectedProvider,
-        input, // Use original prompt for accurate code generation
-        { terms: [], confidence: 1 },
+        input, // Use original prompt (linguistics provides metadata alongside)
+        { terms: translation.terms, confidence: translation.confidence },
         async (phase: BuildPhase) => {
           await storage.updateBuildSessionStatus(session.id, phase);
           sendEvent({ type: 'status', phase, sessionId: session.id });

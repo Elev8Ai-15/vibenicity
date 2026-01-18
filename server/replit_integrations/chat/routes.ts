@@ -66,7 +66,9 @@ export function registerChatRoutes(app: Express): void {
       const conversationId = parseInt(req.params.id);
       const { content } = req.body;
 
-      // Linguistics disabled for performance
+      // Linguistics analysis (OPTIMIZED - now instant!)
+      const translation = engine.translate(content);
+
       // Save user message
       await chatStorage.createMessage(conversationId, "user", content);
 
@@ -82,10 +84,28 @@ export function registerChatRoutes(app: Express): void {
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
+      // If linguistics detected terms, send metadata to client
+      if (translation.terms.length > 0) {
+        const linguisticsInfo = {
+          type: "linguistics",
+          terms: translation.terms,
+          confidence: translation.confidence
+        };
+        res.write(`data: ${JSON.stringify(linguisticsInfo)}\n\n`);
+      }
+
+      // Build context-aware system prompt
+      const systemPrompt = translation.terms.length > 0
+        ? `You are a helpful assistant. Note: The user used some slang/dialect terms: ${translation.terms.map(t => `"${t.term}" means "${t.meaning}"`).join(", ")}. Respond naturally while understanding their intent.`
+        : "You are a helpful assistant.";
+
       // Stream response from OpenAI
       const stream = await openai.chat.completions.create({
         model: "gpt-5.1",
-        messages: chatMessages,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...chatMessages
+        ],
         stream: true,
         max_completion_tokens: 2048,
       });

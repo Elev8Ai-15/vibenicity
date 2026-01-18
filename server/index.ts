@@ -64,7 +64,11 @@ app.use((req, res, next) => {
   // Set up authentication BEFORE other routes
   await setupAuth(app);
   registerAuthRoutes(app);
-  
+
+  // Initialize self-learning slang discovery service
+  const { initializeSlangDiscovery } = await import('./lib/slang-discovery');
+  await initializeSlangDiscovery();
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

@@ -49,6 +49,33 @@ export async function registerRoutes(
       // 1. Analyze linguistics (OPTIMIZED - now instant!)
       const translation = engine.translate(input);
 
+      // Proactive slang discovery: learn from user input (non-blocking)
+      // This runs in background and doesn't delay the build
+      (async () => {
+        try {
+          const { discoverAndCacheSlang } = await import('./lib/slang-discovery');
+
+          // Extract potential slang words from input
+          const words = input.toLowerCase().match(/\b\w+\b/g) || [];
+          const uniqueWords = Array.from(new Set(words)).filter((w): w is string => {
+            // Skip very short words, common stopwords, and already-detected terms
+            if (typeof w !== 'string' || w.length < 3) return false;
+            if (translation.terms.some(t => t.term.toLowerCase() === w)) return false;
+            // Skip common English words (basic filter)
+            const commonWords = ['the', 'and', 'for', 'with', 'that', 'this', 'from', 'have', 'make', 'build', 'create', 'app', 'dashboard', 'website'];
+            if (commonWords.includes(w)) return false;
+            return true;
+          });
+
+          // Discover each unknown word (limited to prevent API spam)
+          for (const word of uniqueWords.slice(0, 5)) { // Max 5 lookups per request
+            await discoverAndCacheSlang(word);
+          }
+        } catch (error) {
+          console.error('[SlangDiscovery] Background discovery failed:', error);
+        }
+      })();
+
       // 2. Smart provider selection if 'auto'
       let selectedProvider = provider as AIProvider;
       if (provider === 'auto') {

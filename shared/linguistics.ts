@@ -162,6 +162,7 @@ interface CompiledPattern {
 class LinguisticsEngine {
   private patterns: CompiledPattern[] = [];
   private db = LINGUISTICS;
+  private dynamicPatterns: Map<string, CompiledPattern> = new Map(); // Cache for dynamic terms
 
   constructor() {
     // PRE-COMPILE all regexes ONCE at initialization (not on every translate call!)
@@ -187,13 +188,33 @@ class LinguisticsEngine {
     this.patterns = allTerms.sort((a, b) => b.term.length - a.term.length);
   }
 
+  // Add a dynamically learned term to the runtime cache
+  addDynamicTerm(term: string, meaning: string, category: LinguisticCategory): void {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b${escaped}\\b`, 'gi');
+
+    this.dynamicPatterns.set(term.toLowerCase(), {
+      regex,
+      term,
+      meaning,
+      category
+    });
+  }
+
+  // Load dynamic terms from database (called by storage layer)
+  loadDynamicTerms(terms: Array<{ term: string; meaning: string; category: string }>): void {
+    for (const t of terms) {
+      this.addDynamicTerm(t.term, t.meaning, t.category as LinguisticCategory);
+    }
+  }
+
   translate(input: string): TranslationResult {
     if (!input) return { original: '', terms: [], confidence: 1, translatedText: input };
 
     const found: LinguisticTerm[] = [];
     const foundSet = new Set<string>(); // Prevent duplicates
 
-    // FAST: Just test pre-compiled regexes (no rebuilding, no re-sorting!)
+    // FAST: Test pre-compiled static regexes first
     for (const pattern of this.patterns) {
       if (pattern.regex.test(input)) {
         const key = `${pattern.term}:${pattern.category}`;
@@ -206,6 +227,22 @@ class LinguisticsEngine {
           });
         }
         // Reset regex lastIndex for global flag
+        pattern.regex.lastIndex = 0;
+      }
+    }
+
+    // ALSO check dynamic patterns (learned terms)
+    for (const pattern of Array.from(this.dynamicPatterns.values())) {
+      if (pattern.regex.test(input)) {
+        const key = `${pattern.term}:${pattern.category}`;
+        if (!foundSet.has(key)) {
+          foundSet.add(key);
+          found.push({
+            term: pattern.term,
+            meaning: pattern.meaning,
+            category: pattern.category
+          });
+        }
         pattern.regex.lastIndex = 0;
       }
     }

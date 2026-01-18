@@ -1,19 +1,22 @@
 import { db } from "./db";
-import { 
-  buildSessions, 
-  generatedFiles, 
+import {
+  buildSessions,
+  generatedFiles,
   buildLogs,
   fileVersions,
   rateLimits,
+  dynamicSlang,
   type InsertBuildSession,
   type InsertGeneratedFile,
   type InsertBuildLog,
   type InsertFileVersion,
+  type InsertDynamicSlang,
   type BuildSession,
   type GeneratedFile,
   type BuildLog,
   type FileVersion,
-  type RateLimit
+  type RateLimit,
+  type DynamicSlang
 } from "@shared/schema";
 import { eq, desc, and, max, sql } from "drizzle-orm";
 
@@ -41,15 +44,22 @@ export interface IStorage {
   
   // Rate limiting
   checkAndIncrementRateLimit(userId: string, limit: number, windowMs: number): Promise<{ allowed: boolean; remaining: number }>;
-  
+
   // Analytics
-  getUserBuildStats(userId: string): Promise<{ 
-    totalBuilds: number; 
-    successfulBuilds: number; 
-    failedBuilds: number; 
+  getUserBuildStats(userId: string): Promise<{
+    totalBuilds: number;
+    successfulBuilds: number;
+    failedBuilds: number;
     recentBuilds: BuildSession[];
     providerUsage: Record<string, number>;
   }>;
+
+  // Dynamic slang management (self-learning linguistics)
+  findDynamicSlangTerm(term: string): Promise<DynamicSlang | undefined>;
+  createDynamicSlangTerm(slang: InsertDynamicSlang): Promise<DynamicSlang>;
+  incrementSlangUsage(term: string): Promise<void>;
+  getPopularSlang(limit: number): Promise<DynamicSlang[]>;
+  getAllDynamicSlang(): Promise<DynamicSlang[]>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -194,6 +204,46 @@ class DatabaseStorage implements IStorage {
     });
     
     return { totalBuilds, successfulBuilds, failedBuilds, recentBuilds, providerUsage };
+  }
+
+  // Dynamic slang management (self-learning linguistics)
+  async findDynamicSlangTerm(term: string): Promise<DynamicSlang | undefined> {
+    const [result] = await db.select()
+      .from(dynamicSlang)
+      .where(eq(dynamicSlang.term, term.toLowerCase()));
+    return result;
+  }
+
+  async createDynamicSlangTerm(slang: InsertDynamicSlang): Promise<DynamicSlang> {
+    const [result] = await db.insert(dynamicSlang)
+      .values({
+        ...slang,
+        term: slang.term.toLowerCase(), // Normalize to lowercase
+      })
+      .returning();
+    return result;
+  }
+
+  async incrementSlangUsage(term: string): Promise<void> {
+    await db.update(dynamicSlang)
+      .set({
+        usageCount: sql`${dynamicSlang.usageCount} + 1`,
+        lastUsed: new Date(),
+      })
+      .where(eq(dynamicSlang.term, term.toLowerCase()));
+  }
+
+  async getPopularSlang(limit: number): Promise<DynamicSlang[]> {
+    return await db.select()
+      .from(dynamicSlang)
+      .orderBy(desc(dynamicSlang.usageCount))
+      .limit(limit);
+  }
+
+  async getAllDynamicSlang(): Promise<DynamicSlang[]> {
+    return await db.select()
+      .from(dynamicSlang)
+      .orderBy(desc(dynamicSlang.createdAt));
   }
 }
 

@@ -71,6 +71,21 @@ export const rateLimits = pgTable("rate_limits", {
   windowStart: timestamp("window_start").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// Dynamic Slang Terms - self-learning linguistics database
+export const dynamicSlang = pgTable("dynamic_slang", {
+  id: serial("id").primaryKey(),
+  term: text("term").notNull().unique(), // The slang term
+  meaning: text("meaning").notNull(), // The translation/definition
+  category: text("category").notNull(), // GEN_Z, AAVE, TECH, etc.
+  source: text("source").notNull(), // 'genius', 'urbandictionary', 'gemini', 'user'
+  sourceUrl: text("source_url"), // Link to song lyrics, UD page, etc.
+  sourceMetadata: jsonb("source_metadata"), // Song name, artist, year, etc.
+  confidence: integer("confidence").notNull().default(80), // 0-100
+  usageCount: integer("usage_count").notNull().default(1), // How many times detected
+  lastUsed: timestamp("last_used").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 // Insert schemas
 export const insertBuildSessionSchema = createInsertSchema(buildSessions).omit({ id: true, createdAt: true, completedAt: true });
 export const insertGeneratedFileSchema = createInsertSchema(generatedFiles).omit({ id: true, createdAt: true });
@@ -79,6 +94,7 @@ export const insertFileVersionSchema = createInsertSchema(fileVersions).omit({ i
 export const insertRateLimitSchema = createInsertSchema(rateLimits).omit({ id: true });
 export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true });
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, createdAt: true });
+export const insertDynamicSlangSchema = createInsertSchema(dynamicSlang).omit({ id: true, createdAt: true, lastUsed: true });
 
 // Types
 export type BuildSession = typeof buildSessions.$inferSelect;
@@ -95,3 +111,5 @@ export type Conversation = typeof conversations.$inferSelect;
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type DynamicSlang = typeof dynamicSlang.$inferSelect;
+export type InsertDynamicSlang = z.infer<typeof insertDynamicSlangSchema>;

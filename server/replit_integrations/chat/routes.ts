@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import OpenAI from "openai";
 import { chatStorage } from "./storage";
-import { engine } from "../../../client/src/lib/linguistics";
+import { engine } from "../../../shared/linguistics";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,

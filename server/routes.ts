@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { type AIProvider } from "./lib/ai-clients";
 import { runPipeline, type BuildPhase } from "./lib/build-pipeline";
-import { engine } from "../client/src/lib/linguistics";
+import { engine } from "../shared/linguistics";
 import { isAuthenticated } from "./replit_integrations/auth";
 import JSZip from "jszip";
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { engine, LinguisticTerm, TranslationResult } from './linguistics';
+import { engine, LinguisticTerm, TranslationResult } from '../../../shared/linguistics';
 
 export type MessageRole = 'user' | 'system' | 'assistant' | 'error';
 
